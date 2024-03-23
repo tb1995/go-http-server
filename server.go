@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -20,7 +21,7 @@ type ServerConfig struct {
 func main() {
 	cfg, err := loadConfig()
 	if err != nil {
-		log.Fatal("Error loading configuration: ", err)
+		log.Println("Error loading configuration: ", err)
 	}
 
 	mux := http.NewServeMux()
@@ -28,9 +29,9 @@ func main() {
 
 	err = http.ListenAndServe(":"+cfg.Port, mux)
 	if errors.Is(err, http.ErrServerClosed) {
-		fmt.Println("Server closed")
+		log.Println("Server closed")
 	} else if err != nil {
-		log.Fatal("Error starting server: ", err)
+		log.Println("Error starting server: ", err)
 	}
 }
 
@@ -50,11 +51,15 @@ func loadConfig() (*ServerConfig, error) {
 
 func handleRequest(cfg *ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+        
 		filePath := cfg.PublicDirectory + r.URL.Path
-		if _, err := os.Stat(filePath); errors.Is(err, os.ErrNotExist) {
+
+        if strings.Contains(r.URL.Path, "..") {
+            fmt.Printf("🐟y behaviour")
+            filePath = cfg.PublicDirectory + cfg.NotFoundPagePath
+        } else if _, err := os.Stat(filePath); errors.Is(err, os.ErrNotExist) {
 			filePath = cfg.PublicDirectory + cfg.NotFoundPagePath
-		}
-		if r.URL.Path == "/" {
+		} else if r.URL.Path == "/" {
 			filePath = cfg.PublicDirectory + cfg.DefaultIndexPath
 		}
 		content, err := os.ReadFile(filePath)
