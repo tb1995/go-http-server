@@ -1,5 +1,7 @@
 # go-http-server
 
+My go journey finally begins! 
+
 Inspired by this coding challenge:
 [https://codingchallenges.substack.com/p/coding-challenged-11-build-your-own](https://codingchallenges.substack.com/p/coding-challenged-11-build-your-own)
 
