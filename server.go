@@ -10,43 +10,59 @@ import (
 	"github.com/joho/godotenv"
 )
 
-const webPage = `
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <title>Simple Web Page</title>
-  </head>
-  <body>
-    <h1 style="color: red;">Test Web Page</h1>
-    <p>My web server served this page!</p>
-  </body>
-</html>
-`
-
-func getRoot(w http.ResponseWriter, r *http.Request) {
-    w.Header().Set("Content-Type", "text/html; charset=utf-8")
-    fmt.Fprint(w, webPage)
-    fmt.Printf("got / Request\n")
+type ServerConfig struct {
+	Port              string
+	PublicDirectory   string
+	NotFoundPagePath  string
+	DefaultIndexPath string
 }
 
 func main() {
-    // load .env
-    err:= godotenv.Load(".env")
-    if err!=nil {
-        log.Fatal("Error loading .env file: %s", err)
-    }
-    
-    publicDirectory := os.Getenv("PUBLIC_DIRECTORY_PATH")
-    fmt.Printf(publicDirectory)
+	cfg, err := loadConfig()
+	if err != nil {
+		log.Fatal("Error loading configuration: ", err)
+	}
 
-    http.HandleFunc("/", getRoot)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", handleRequest(cfg))
 
-    err = http.ListenAndServe(":3333", nil)
+	err = http.ListenAndServe(":"+cfg.Port, mux)
+	if errors.Is(err, http.ErrServerClosed) {
+		fmt.Println("Server closed")
+	} else if err != nil {
+		log.Fatal("Error starting server: ", err)
+	}
+}
 
-    if errors.Is(err, http.ErrServerClosed) {
-        fmt.Printf("Server closed \n")
-    } else if err!= nil{
-        fmt.Printf("Error starting server: %s\n", err)
-    }
+func loadConfig() (*ServerConfig, error) {
+	err := godotenv.Load(".env")
+	if err != nil {
+		return nil, err
+	}
 
+	return &ServerConfig{
+		Port:              os.Getenv("PORT"),
+		PublicDirectory:   os.Getenv("PUBLIC_DIRECTORY_PATH"),
+		NotFoundPagePath:  os.Getenv("NOT_FOUND_PAGE_PATH"),
+		DefaultIndexPath: os.Getenv("DEFAULT_INDEX_PATH"),
+	}, nil
+}
+
+func handleRequest(cfg *ServerConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		filePath := cfg.PublicDirectory + r.URL.Path
+		if _, err := os.Stat(filePath); errors.Is(err, os.ErrNotExist) {
+			filePath = cfg.PublicDirectory + cfg.NotFoundPagePath
+		}
+		if r.URL.Path == "/" {
+			filePath = cfg.PublicDirectory + cfg.DefaultIndexPath
+		}
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			log.Println("Error serving file:", err)
+			return
+		}
+		fmt.Fprint(w, string(content))
+	}
 }
